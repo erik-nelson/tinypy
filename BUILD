@@ -1,4 +1,18 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+
+cc_library(
+    name = "stream",
+    hdrs = ["stream.h"],
+)
+
+cc_test(
+    name = "stream_test",
+    srcs = ["stream_test.cc"],
+    deps = [
+        ":stream",
+        "@gtest//:gtest_main",
+    ],
+)
 
 cc_library(
     name = "version",
