@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -13,41 +14,41 @@ struct Token {
     NEWLINE,
 
     // Keywords.
-    AND,
-    AS,
-    ASSERT,
-    ASYNC,
-    AWAIT,
-    BREAK,
-    CLASS,
-    CONTINUE,
-    DEF,
-    DEL,
-    ELIF,
-    ELSE,
-    EXCEPT,
-    FALSE,
-    FINALLY,
-    FOR,
-    FROM,
-    GLOBAL,
-    IF,
-    IMPORT,
-    IN,
-    IS,
-    LAMBDA,
-    NONE,
-    NONLOCAL,
-    NOT,
-    OR,
-    PASS,
-    RAISE,
-    RETURN,
-    TRUE,
-    TRY,
-    WHILE,
-    WITH,
-    YIELD,
+    AND,      // and
+    AS,       // as
+    ASSERT,   // assert
+    ASYNC,    // async
+    AWAIT,    // await
+    BREAK,    // break
+    CLASS,    // class
+    CONTINUE, // continue
+    DEF,      // def
+    DEL,      // del
+    ELIF,     // elif
+    ELSE,     // else
+    EXCEPT,   // except
+    FALSE,    // False
+    FINALLY,  // finally
+    FOR,      // for
+    FROM,     // from
+    GLOBAL,   // global
+    IF,       // if
+    IMPORT,   // import
+    IN,       // in
+    IS,       // is
+    LAMBDA,   // lambda
+    NONE,     // None
+    NONLOCAL, // nonlocal
+    NOT,      // not
+    OR,       // or
+    PASS,     // pass
+    RAISE,    // raise
+    RETURN,   // return
+    TRUE,     // True
+    TRY,      // try
+    WHILE,    // while
+    WITH,     // with
+    YIELD,    // yield
 
     // Identifiers.
     IDENTIFIER,
@@ -56,7 +57,6 @@ struct Token {
     INTEGER,
     FLOAT,
     STRING,
-    BOOLEAN,
 
     // Operators.
     PLUS,            // +
@@ -83,32 +83,32 @@ struct Token {
 
     // Delimiters.
     // TODO(erik): Handle decorators ("@"). Overloaded against "AT" operator.
-    LEFT_PAREN,      // (
-    RIGHT_PAREN,     // )
-    LEFT_BRACKET,    // [
-    RIGHT_BRACKET,   // ]
-    LEFT_BRACE,      // {
-    RIGHT_BRACE,     // }
-    COMMA,           // ,
-    COLON,           // :
-    MEMBER_ACCESS,   // .
-    SEMICOLON,       // ;
-    // DECORATE,        // @
-    ASSIGN,          // =
-    ANNOTATE,        // ->
-    PLUS_ASSIGN,     // +=
-    MINUS_ASSIGN,    // -=
-    MULTIPLY_ASSIGN, // *=
-    DIVIDE_ASSIGN,   // /=
+    LEFT_PAREN,          // (
+    RIGHT_PAREN,         // )
+    LEFT_BRACKET,        // [
+    RIGHT_BRACKET,       // ]
+    LEFT_BRACE,          // {
+    RIGHT_BRACE,         // }
+    COMMA,               // ,
+    COLON,               // :
+    MEMBER_ACCESS,       // .
+    SEMICOLON,           // ;
+    // DECORATE,         // @
+    ASSIGN,              // =
+    ANNOTATE,            // ->
+    PLUS_ASSIGN,         // +=
+    MINUS_ASSIGN,        // -=
+    MULTIPLY_ASSIGN,     // *=
+    DIVIDE_ASSIGN,       // /=
     FLOOR_DIVIDE_ASSIGN, // //=
-    MODULO_ASSIGN,   // %=
-    AT_ASSIGN,       // @=
-    AND_ASSIGN,      // &=
-    OR_ASSIGN,       // |=
-    XOR_ASSIGN,      // ^=
-    RIGHT_SHIFT_ASSIGN, // >>=
-    LEFT_SHIFT_ASSIGN,  // <<=
-    POWER_ASSIGN,    // **=
+    MODULO_ASSIGN,       // %=
+    AT_ASSIGN,           // @=
+    AND_ASSIGN,          // &=
+    OR_ASSIGN,           // |=
+    XOR_ASSIGN,          // ^=
+    RIGHT_SHIFT_ASSIGN,  // >>=
+    LEFT_SHIFT_ASSIGN,   // <<=
+    POWER_ASSIGN,        // **=
   };
 
   // Start/end values for iterating over subtypes of tokens.
@@ -119,19 +119,19 @@ struct Token {
   static constexpr size_t kIdentifierBegin = static_cast<size_t>(Type::IDENTIFIER);
   static constexpr size_t kIdentifierEnd = static_cast<size_t>(Type::IDENTIFIER);
   static constexpr size_t kLiteralBegin = static_cast<size_t>(Type::INTEGER);
-  static constexpr size_t kLiteralEnd = static_cast<size_t>(Type::BOOLEAN);
+  static constexpr size_t kLiteralEnd = static_cast<size_t>(Type::STRING);
   static constexpr size_t kOperatorBegin = static_cast<size_t>(Type::PLUS);
   static constexpr size_t kOperatorEnd = static_cast<size_t>(Type::NOT_EQUALS);
   static constexpr size_t kDelimiterBegin = static_cast<size_t>(Type::LEFT_PAREN);
   static constexpr size_t kDelimiterEnd = static_cast<size_t>(Type::POWER_ASSIGN);
-    
-  // The type of token.
-  Type type;
 
-  // The token's value. Populated for literals and identifiers.
-  std::optional<std::string> value;
+  // Constructors.
+  Token() = default;
+  Token(Type type, std::optional<std::string> value = std::nullopt);
 
-  // The token string.
+  // The token string, e.g. an AWAIT token would return 'await'. Not 
+  // always available, e.g. INDENT, DEDENT, IDENTIFIER tokens have no
+  // associated string.
   std::string_view String() const;
 
   // The token's length.
@@ -146,7 +146,22 @@ struct Token {
   bool IsDelimiter() const;
 
   // Debug printing.
-  void Print() const;
+  std::string DebugString() const;
+  friend std::ostream& operator<<(std::ostream& os, const Token& token) {
+    os << token.DebugString();
+    return os;
+  }
+
+
+  // Comparisons.
+  bool operator==(const Token& rhs) const;
+  bool operator!=(const Token& rhs) const;
+
+  // The type of token.
+  Type type;
+  // The token's value. Populated for literals and identifiers.
+  // TODO(erik): Can this be a variant, where we parse floats/ints/bools directly?
+  std::optional<std::string> value;
 };
 
 // Mapping from string to token type and vice versa.

@@ -30,7 +30,20 @@ cc_library(
     name = "lexer",
     srcs = ["lexer.cc"],
     hdrs = ["lexer.h"],
-    deps = [":token"],
+    deps = [
+      ":stream",
+      ":token",
+    ],
+)
+
+cc_test(
+    name = "lexer_test",
+    srcs = ["lexer_test.cc"],
+    deps = [
+        ":lexer",
+        ":token",
+        "@gtest//:gtest_main",
+    ],
 )
 
 cc_library(

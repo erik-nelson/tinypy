@@ -1,5 +1,8 @@
 #include "token.h"
 
+Token::Token(Type type, std::optional<std::string> value) 
+  : type(type), value(std::move(value)) {}
+
 std::string_view Token::String() const {
   return {kTokenTypeToString.at(type).data()};
 }
@@ -12,21 +15,26 @@ bool Token::IsLiteral() const { return ::IsLiteral(type); }
 bool Token::IsOperator() const { return ::IsOperator(type); }
 bool Token::IsDelimiter() const { return ::IsDelimiter(type); }
 
-void Token::Print() const {
-    printf("Token: type = \'%s\'", String().data());
-    if (value) printf(", value = \'%s\'", value->c_str());
-    printf("\n");
+std::string Token::DebugString() const {
+  std::string debug_string;
+  debug_string += "Token: type = \'" + std::string(String()) + "\'";
+  if (value) debug_string += ", value = \'" + *value + "\'";
+  debug_string += "\n";
+  return debug_string;
 }
 
+bool Token::operator==(const Token& rhs) const {
+  return type == rhs.type && value == rhs.value;
+}
 
- const std::unordered_map<std::string, Token::Type> kTokenStringToType = 
+bool Token::operator!=(const Token& rhs) const {
+  return !(*this == rhs);
+}
+
+const std::unordered_map<std::string, Token::Type> kTokenStringToType = 
   []() -> std::unordered_map<std::string, Token::Type> {
     std::unordered_map<std::string, Token::Type> tokens;
-
-    // Indentation.
     tokens["\n"] = Token::Type::NEWLINE;
-
-    // Keywords.
     tokens["and"] = Token::Type::AND;
     tokens["as"] = Token::Type::AS;
     tokens["assert"] = Token::Type::ASSERT;
@@ -50,7 +58,7 @@ void Token::Print() const {
     tokens["in"] = Token::Type::IN;
     tokens["is"] = Token::Type::IS;
     tokens["lambda"] = Token::Type::LAMBDA;
-    tokens["none"] = Token::Type::NONE;                
+    tokens["None"] = Token::Type::NONE;                
     tokens["nonlocal"] = Token::Type::NONLOCAL;
     tokens["not"] = Token::Type::NOT;
     tokens["or"] = Token::Type::OR;
@@ -62,11 +70,6 @@ void Token::Print() const {
     tokens["while"] = Token::Type::WHILE;
     tokens["with"] = Token::Type::WITH;
     tokens["yield"] = Token::Type::YIELD;
-
-    // Literals.
-    // TODO(erik)
-
-    // Operators.
     tokens["+"] = Token::Type::PLUS;
     tokens["-"] = Token::Type::MINUS;
     tokens["*"] = Token::Type::MULTIPLY;
@@ -88,8 +91,6 @@ void Token::Print() const {
     tokens[">="] = Token::Type::GREATER_EQUAL;
     tokens["=="] = Token::Type::EQUALS;
     tokens["!="] = Token::Type::NOT_EQUALS;
-
-    // Delimiters.
     tokens["("] = Token::Type::LEFT_PAREN;
     tokens[")"] = Token::Type::RIGHT_PAREN;
     tokens["["] = Token::Type::LEFT_BRACKET;
@@ -119,28 +120,20 @@ void Token::Print() const {
     return tokens;
   }();
 
- const std::unordered_map<Token::Type, std::string> kTokenTypeToString =
+const std::unordered_map<Token::Type, std::string> kTokenTypeToString =
   []() -> std::unordered_map<Token::Type, std::string> {
-    std::unordered_map<Token::Type, std::string> type_to_string;
-    for (const auto& [string, type] : kTokenStringToType) {
-        type_to_string[type] = string;
-    }
-
-    // Indentation.
-    type_to_string[Token::Type::INDENT] = "indent";
-    type_to_string[Token::Type::DEDENT] = "dedent";
-
-    // Identifiers.
-    type_to_string[Token::Type::IDENTIFIER] = "identifier";
-
-    // Literals.
-    type_to_string[Token::Type::INTEGER] = "int";
-    type_to_string[Token::Type::FLOAT] = "float";
-    type_to_string[Token::Type::STRING] = "str";
-    type_to_string[Token::Type::BOOLEAN] = "bool";
-
-    return type_to_string;
+    std::unordered_map<Token::Type, std::string> tokens;
+    for (const auto& [string, type] : kTokenStringToType) tokens[type] = string;
+    // Add token types that have no corresponding string.
+    tokens[Token::Type::INDENT] = "indent";
+    tokens[Token::Type::DEDENT] = "dedent";
+    tokens[Token::Type::IDENTIFIER] = "identifier";
+    tokens[Token::Type::INTEGER] = "int";
+    tokens[Token::Type::FLOAT] = "float";
+    tokens[Token::Type::STRING] = "str";
+    return tokens;
   }();
+
 
 bool IsIndentation(Token::Type type) {
   return static_cast<size_t>(type) >= Token::kIndentationBegin 

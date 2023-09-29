@@ -4,8 +4,10 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 #include <utility>
 
+#include "stream.h"
 #include "token.h"
 
 // Lexes a given set of source lines into tokens, following
@@ -56,3 +58,6 @@ class Lexer {
   // continuing.
   std::deque<Token> tokens_;
 };
+
+// Standalone helper function that lexes the input source code to tokens in one call.
+std::vector<Token> Lex(std::string source);

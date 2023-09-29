@@ -1,3 +1,2 @@
-- Unit tests for lexer
 - Swap to async stream between lexer/parser
 - Fix REPL when blocks end in semicolon (don't evaluate immediately)
