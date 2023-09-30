@@ -42,8 +42,7 @@ Token& BestMatch(std::vector<Token>& tokens) {
 } 
 } // namespace
 
-Lexer::Lexer() 
-  : tokens_([&](std::vector<Token>* buffer) { return EatChar(buffer); }) {}
+Lexer::Lexer() : tokens_([&](std::vector<Token>* buffer) { return EatChar(buffer); }) {}
 
 Lexer::Lexer(std::string source) : Lexer() {  SetSource(std::move(source)); }
 
@@ -75,7 +74,7 @@ bool Lexer::EatChar(std::vector<Token>* buffer) {
   if (MatchIdentifier(buffer)) return KeepGoing();
 
   // Couldn't find anything to match this char. Ignore it and proceed.
-  // This skips whitespace implicitly.
+  // This skips non-indentation, non-newline whitespace implicitly.
   ++idx_;
   return KeepGoing(); 
 }
@@ -209,7 +208,7 @@ bool Lexer::MatchLiteral(std::vector<Token>* buffer) {
   std::smatch match;
   std::string::const_iterator begin = source_.begin() + idx_;
   std::string::const_iterator end = source_.end();
-  for (auto& [type, regex] : regexes) {
+  for (const auto& [type, regex] : regexes) {
     if (std::regex_search(begin, end, match, regex)) {
       idx_ += match[0].length();
 

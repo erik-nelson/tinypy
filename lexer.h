@@ -33,9 +33,6 @@ class Lexer {
   StreamReader<Token> TokenStream();
 
  private:
-  // Whether we have any (processed) tokens available.
-  bool HaveTokens() const { return !tokens_.Empty(); }
-
   // Whether we have any more source code available to lex.
   bool KeepGoing() const { return idx_ < source_.size(); }
 
