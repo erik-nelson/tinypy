@@ -1,9 +1,15 @@
 #include "interpreter.h"
 
-void Interpreter::Interpret(std::string source) {
-  lexer_.SetSource(std::move(source));
+Interpreter::Interpreter() 
+  : lexer_(new Lexer),
+    parser_(new Parser(lexer_->TokenStream())) {}
 
-  while (auto maybe_token = lexer_.NextToken()) {
-    std::cout << *maybe_token;
+void Interpreter::Interpret(std::string source) {
+  lexer_->SetSource(std::move(source));
+  // TODO(erik): Clear parser?
+
+  StreamReader<Token> stream = lexer_->TokenStream();
+  while (std::optional<Token> token = stream.Read()) {
+    std::cout << *token;
   }
 }

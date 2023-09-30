@@ -4,13 +4,14 @@
 TEST(Stream, TestStream) {
   // The producer counts to 5, and is then finished.
   int value = 0;
-  Stream<int>::FillCallback fill_callback = [&]() -> std::optional<int> {
-    if (value < 5) return value++;
-    return std::nullopt;
+  Stream<int>::FillCallback fill_callback = [&](std::vector<int>* buffer) -> bool {
+    if (value >= 5) return false;
+    buffer->push_back(value++);
+    return true;
   };
 
   // Create a single element stream.
-  Stream<int> stream(fill_callback, /*buffer_capacity=*/1);
+  Stream<int> stream(fill_callback, /*min_buffer_size=*/1);
   StreamReader<int> reader = stream.MakeReader();
 
   // Sanity checks.

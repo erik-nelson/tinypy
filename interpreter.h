@@ -1,15 +1,18 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include "lexer.h"
+#include "parser.h"
 
 class Interpreter {
  public:
-  Interpreter() = default;
+  Interpreter();
 
   void Interpret(std::string source);
 
  private:
-  Lexer lexer_;
+  std::unique_ptr<Lexer> lexer_;
+  std::unique_ptr<Parser> parser_;
 };

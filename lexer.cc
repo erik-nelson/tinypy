@@ -2,10 +2,7 @@
 
 #include <algorithm>
 #include <stdexcept>
-#include <string>
 #include <regex>
-#include <vector>
-#include <utility>
 
 namespace {
 // Hard coded indentation width.
@@ -45,69 +42,52 @@ Token& BestMatch(std::vector<Token>& tokens) {
 } 
 } // namespace
 
+Lexer::Lexer() 
+  : tokens_([&](std::vector<Token>* buffer) { return EatChar(buffer); }) {}
 
-Lexer::Lexer(std::string source) { SetSource(std::move(source)); }
+Lexer::Lexer(std::string source) : Lexer() {  SetSource(std::move(source)); }
 
 void Lexer::SetSource(std::string source) {
   idx_ = 0u;
   indentation_ = 0;
   source_ = std::move(source);
-  tokens_.clear();
+  tokens_.Clear();
 }
 
-std::optional<Token> Lexer::NextToken() {
-  // Eat chars until we lex more tokens.
-  while (!HaveTokens() && EatChar());
+StreamReader<Token> Lexer::TokenStream() { return tokens_.MakeReader(); }
 
-  // Return the next token if available.
-  if (HaveTokens()) {
-    Token token = std::move(tokens_.front());
-    tokens_.pop_front();
-    return token;
-  }
-
-  // No more tokens available; we've exhausted the source code.
-  return std::nullopt;
-}
-
-bool Lexer::EatChar() {
+bool Lexer::EatChar(std::vector<Token>* buffer) {
   if (!KeepGoing()) return false;
  
   // Try to find indentation related tokens.
-  if (MatchIndentation()) return KeepGoing();
+  if (MatchIndentation(buffer)) return KeepGoing();
 
   // Try to find keyword tokens.
-  if (MatchKeyword()) return KeepGoing();
+  if (MatchKeyword(buffer)) return KeepGoing();
 
   // Try to find literal tokens.
-  if (MatchLiteral()) return KeepGoing();
+  if (MatchLiteral(buffer)) return KeepGoing();
 
   // Try to find operator or delimiter tokens.
-  if (MatchOperatorOrDelimiter()) return KeepGoing();
+  if (MatchOperatorOrDelimiter(buffer)) return KeepGoing();
 
   // Try to find identifier tokens.
-  if (MatchIdentifier()) return KeepGoing();
+  if (MatchIdentifier(buffer)) return KeepGoing();
 
+  // Couldn't find anything to match this char. Ignore it and proceed.
+  // This skips whitespace implicitly.
   ++idx_;
-  return KeepGoing();  // Skip white space implicitly.
+  return KeepGoing(); 
 }
 
-bool Lexer::EatUntil(std::function<bool(size_t)> predicate) {
-  while (idx_ < source_.size()) {
-    if (predicate(idx_)) break;
-    ++idx_;
-  }
-  return idx_ < source_.size();
-}
-
-bool Lexer::MatchIndentation() {
+bool Lexer::MatchIndentation(std::vector<Token>* buffer) {
   bool matched = false;
   bool eat_indentation = (idx_ == 0);
 
   // Check for newlines. Repeated newlines are interpreted as a single newline.
   while (idx_ < source_.size() && source_[idx_] == '\n') {
     if (!matched) {
-      tokens_.emplace_back(Token::Type::NEWLINE);
+      buffer->emplace_back(Token::Type::NEWLINE);
       eat_indentation = true;
       matched = true;
     }
@@ -143,9 +123,9 @@ bool Lexer::MatchIndentation() {
     }
 
     // Insert new indent or dedent tokens.
+    const Token::Type type = (delta_indentation < 0 ? Token::Type::DEDENT : Token::Type::INDENT);
     for (int i = 0; i < std::abs(delta_indentation); ++i) {
-      const Token::Type type = (delta_indentation < 0 ? Token::Type::DEDENT : Token::Type::INDENT);
-      tokens_.emplace_back(type);
+      buffer->emplace_back(type);
       matched = true;
     }
   }
@@ -153,7 +133,7 @@ bool Lexer::MatchIndentation() {
   return matched;
 }
 
-bool Lexer::MatchKeyword() {
+bool Lexer::MatchKeyword(std::vector<Token>* buffer) {
   bool matched = false;
 
   // Find keyword tokens that match at the current source location.
@@ -163,7 +143,7 @@ bool Lexer::MatchKeyword() {
     const Token::Type type = static_cast<Token::Type>(i);
     const std::string& token = kTokenTypeToString.at(type);
     if (MatchToken(source_, idx_, token)) {
-      // The token is only a match if it is not part of a larger word. For example,
+      // The keyword token is only a match if it is not part of a larger word. For example,
       // we don't want to match the keyword `in` when given the substring `in_place_transpose`,
       // which should instead be an identifier.
       if (idx_ + token.size() < source_.size()) {
@@ -177,15 +157,15 @@ bool Lexer::MatchKeyword() {
   // If multiple tokens match, choose the best match.
   if (!matched_tokens.empty()) {
     Token& matched_token = BestMatch(matched_tokens);
-    tokens_.emplace_back(matched_token);
-    idx_ += tokens_.back().Length();
+    buffer->emplace_back(matched_token);
+    idx_ += buffer->back().Length();
     matched = true;
   }
 
   return matched;
 }
 
-bool Lexer::MatchOperatorOrDelimiter() {
+bool Lexer::MatchOperatorOrDelimiter(std::vector<Token>* buffer) {
   bool matched = false;
 
   // Find operator tokens that match at the current source location.
@@ -212,24 +192,23 @@ bool Lexer::MatchOperatorOrDelimiter() {
   // If multiple tokens match, choose the best match.
   if (!matched_tokens.empty()) {
     Token& matched_token = BestMatch(matched_tokens);
-    tokens_.emplace_back(matched_token);
-    idx_ += tokens_.back().Length();
+    buffer->emplace_back(matched_token);
+    idx_ += buffer->back().Length();
     matched = true;
   }
 
   return matched;
 }
 
-bool Lexer::MatchLiteral() {
-  std::smatch match;
-  std::string::const_iterator begin = source_.begin() + idx_;
-  std::string::const_iterator end = source_.end();
-
+bool Lexer::MatchLiteral(std::vector<Token>* buffer) {
   std::unordered_map<Token::Type, std::regex> regexes;
   regexes[Token::Type::STRING] = kStringLiteralRegex;
   regexes[Token::Type::INTEGER] = kIntLiteralRegex;
   regexes[Token::Type::FLOAT] = kFloatLiteralRegex;
 
+  std::smatch match;
+  std::string::const_iterator begin = source_.begin() + idx_;
+  std::string::const_iterator end = source_.end();
   for (auto& [type, regex] : regexes) {
     if (std::regex_search(begin, end, match, regex)) {
       idx_ += match[0].length();
@@ -237,7 +216,7 @@ bool Lexer::MatchLiteral() {
       Token token;
       token.type = type;
       token.value = match[0].str();
-      tokens_.emplace_back(std::move(token));
+      buffer->emplace_back(std::move(token));
       return true;
     }
   }
@@ -246,7 +225,7 @@ bool Lexer::MatchLiteral() {
   return false;
 }
 
-bool Lexer::MatchIdentifier() {
+bool Lexer::MatchIdentifier(std::vector<Token>* buffer) {
   // Search for any valid identifier.
   std::smatch match;
   std::string::const_iterator begin = source_.begin() + idx_;
@@ -257,17 +236,12 @@ bool Lexer::MatchIdentifier() {
       Token token;
       token.type = Token::Type::IDENTIFIER;
       token.value = match[0].str();
-      tokens_.emplace_back(std::move(token));
+      buffer->emplace_back(std::move(token));
   }
 
   return !match.empty();
 }
 
 std::vector<Token> Lex(std::string source) {
-  std::vector<Token> tokens;
-  Lexer lexer(std::move(source));
-  while (auto maybe_token = lexer.NextToken()) {
-    tokens.emplace_back(std::move(*maybe_token));
-  }
-  return tokens;
+  return Lexer(std::move(source)).TokenStream().ReadAll();
 }

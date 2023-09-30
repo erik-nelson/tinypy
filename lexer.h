@@ -1,6 +1,5 @@
 #pragma once
 
-#include <deque>
 #include <functional>
 #include <optional>
 #include <string>
@@ -14,36 +13,45 @@
 // https://docs.python.org/3/reference/lexical_analysis.html
 class Lexer {
  public:
-  Lexer() = default;
+  Lexer();
   explicit Lexer(std::string source);
 
+  // Set the current source code to lex.
   void SetSource(std::string source);
-  std::optional<Token> NextToken();
+
+  // Create a stream reader to read tokens from.
+  // Example:
+  // 
+  //     std::string source_code = "a = 5 * 3 + 2";
+  //     Lexer lexer(std::move(source_code));
+  //     
+  //     StreamReader<Token> stream = lexer.TokenStream();
+  //     while (std::optional<Token> token = stream.Read()) {
+  //       ...
+  //     }
+  //
+  StreamReader<Token> TokenStream();
 
  private:
-  // Whether we have any tokens available.
-  bool HaveTokens() const { return !tokens_.empty(); }
+  // Whether we have any (processed) tokens available.
+  bool HaveTokens() const { return !tokens_.Empty(); }
 
+  // Whether we have any more source code available to lex.
   bool KeepGoing() const { return idx_ < source_.size(); }
 
   // Increment `idx_`, eating the next character available in the provided 
-  // `source_` code. Returns false when we have reached the end of `source_`.
-  bool EatChar();
+  // `source_` code. Populates the provided `buffer` with any new tokens encountered.
+  // Returns false when we have reached the end of `source_`.
+  bool EatChar(std::vector<Token>* buffer);
 
-  // Increment `idx_`, eating whitespace at the front of `source_`. Returns
-  // false when we have reached the end of `source_`.
-  bool EatWhitespace();
-
-  // Helper that increments `idx_` until the predicate is met. Returns false 
-  // when we have reached the end of `source_`.
-  bool EatUntil(std::function<bool(size_t)> predicate);
-
-  // TODO(erik): Describe.
-  bool MatchIndentation();
-  bool MatchKeyword();
-  bool MatchOperatorOrDelimiter();
-  bool MatchLiteral();
-  bool MatchIdentifier();
+  // Attempt to match various language constituents from `source_` at the 
+  // current `idx_`. Populates the provided `buffer` with any new tokens encountered.
+  // Returns whether a match was found.
+  bool MatchIndentation(std::vector<Token>* buffer);
+  bool MatchKeyword(std::vector<Token>* buffer);
+  bool MatchOperatorOrDelimiter(std::vector<Token>* buffer);
+  bool MatchLiteral(std::vector<Token>* buffer);
+  bool MatchIdentifier(std::vector<Token>* buffer);
 
   // Position within `source_`.
   size_t idx_ = 0u;
@@ -54,9 +62,9 @@ class Lexer {
   // Raw source code.
   std::string source_;
 
-  // Tokens already processed on the previous call to NextToken(). Consumed before
-  // continuing.
-  std::deque<Token> tokens_;
+  // Stream of tokens. Each EatChar() call adds an arbitrary number of new
+  // tokens to the stream. Consumers pull from this stream.
+  Stream<Token> tokens_;
 };
 
 // Standalone helper function that lexes the input source code to tokens in one call.
