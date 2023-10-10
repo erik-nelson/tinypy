@@ -1,4 +1,5 @@
 #include "version.h"
+
 #include <sstream>
 
 /*static*/ std::string VersionInfo::ToString() {

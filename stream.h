@@ -6,13 +6,12 @@
 #include <utility>
 #include <vector>
 
-
 // A simple unidirectional stream that allows consumers to pull from producers.
 // NOTE(erik): This is currently synchronous.
 //
 // Example usage:
 //
-//    // User defines a callback that generates new values on request by a reader.
+//    // User defines a callback that generates new values on request.
 //    Stream<Foo>::FillCallback = [](std::vector<Foo>* fill_me) -> bool { ... };
 //
 //    // Create a stream and a reader.
@@ -20,12 +19,12 @@
 //    StreamReader<Foo> reader = stream.MakeReader();
 //
 //    // Users can now request values from the stream as long as they are able
-//    // to be produced. This internally calls the FillCallback until the producer
-//    // is depleted.
+//    // to be produced. This internally calls the FillCallback until the
+//    // producer is depleted.
 //    std::optional<Foo> next = reader.Read();
 //
-//    // Users can also simply read all values from the stream, requesting that the
-//    // producer continue producing them until it runs out.
+//    // Users can also simply read all values from the stream, requesting that
+//    // the producer continue producing them until it runs out.
 //    std::vector<Foo> values = reader.ReadAll();
 //
 template <typename T>
@@ -38,9 +37,9 @@ class StreamReader {
 
   // Peek at the next element in the stream without consuming it.
   // Returns nullopt if the stream was depleted.
-  std::optional<std::reference_wrapper<T>> Peek() {
+  std::optional<const T*> Peek() {
     stream_->Fill();
-    if (!Empty()) return std::ref(stream_->stream_.front());
+    if (!Empty()) return &stream_->stream_.front();
     return std::nullopt;
   }
 
@@ -49,9 +48,9 @@ class StreamReader {
   std::optional<T> Read() {
     stream_->Fill();
     if (!Empty()) {
-        T value = std::move(stream_->stream_.front());
-        stream_->stream_.pop();
-        return value;
+      T value = std::move(stream_->stream_.front());
+      stream_->stream_.pop();
+      return value;
     }
     return std::nullopt;
   }
@@ -61,8 +60,8 @@ class StreamReader {
   bool Advance() {
     stream_->Fill();
     if (!Empty()) {
-        stream_->stream_.pop();
-        return true;
+      stream_->stream_.pop();
+      return true;
     }
     return false;
   }
@@ -78,24 +77,27 @@ class StreamReader {
   bool Finished() const { return stream_->Finished(); }
   // Is the remaining stream buffer empty?
   bool Empty() const { return stream_->Empty(); }
-  // Is the stream depleted? i.e. the producer is finished and the buffer is empty.
+  // Is the stream depleted? i.e. the producer is finished and the buffer is
+  // empty.
   bool Depleted() const { return stream_->Depleted(); }
 
  protected:
   Stream<T>* stream_;
 };
 
+#include <stdio.h>
 // A simple synchronous pull stream.
 template <typename T>
 class Stream {
  public:
-  // A function that when called fills up a container of more values to put into the stream.
+  // A function that when called fills up a container of more values to put into
+  // the stream.
   using FillCallback = std::function<bool(std::vector<T>*)>;
 
-  // Initialize a stream with a fill callback and min buffer size. The read callback
-  // fills the stream with values, when requested by a reader.
-  Stream(FillCallback callback, size_t min_buffer_size = 10) 
-    : callback_(std::move(callback)), min_buffer_size_(min_buffer_size) {}
+  // Initialize a stream with a fill callback and min buffer size. The read
+  // callback fills the stream with values, when requested by a reader.
+  Stream(FillCallback callback, size_t min_buffer_size = 10)
+      : callback_(callback), min_buffer_size_(min_buffer_size) {}
 
   // Make a new reader.
   StreamReader<T> MakeReader() { return {this}; }
@@ -104,19 +106,20 @@ class Stream {
   bool Finished() const { return finished_; }
   // Is the remaining stream buffer empty?
   bool Empty() const { return stream_.empty(); }
-  // Is the stream depleted? i.e. the producer is finished and the buffer is empty.
+  // Is the stream depleted? i.e. the producer is finished and the buffer is
+  // empty.
   bool Depleted() const { return Finished() && Empty(); }
 
   // Clear the stream.
-  void Clear() { 
+  void Clear() {
     stream_ = {};
-    finished_ = false; 
+    finished_ = false;
   }
 
  private:
   friend class StreamReader<T>;
 
-  // Called by readers. Requests new values to be inserted into the queue by 
+  // Called by readers. Requests new values to be inserted into the queue by
   // the producer callback.
   void Fill() {
     std::vector<T> values;
@@ -132,10 +135,10 @@ class Stream {
 
   // When the stream is read from, refill it to at least this many elements.
   size_t min_buffer_size_;
-  
+
   // The stream buffer.
   std::queue<T> stream_;
-  
+
   // Whether the producer is finished. It is possible for the producer to be
   // finished producing values while `stream_` is still non-empty.
   bool finished_ = false;

@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "gdb",
+      "request": "launch",
+      "name": "Debug repl (GDB)",
+      "target": "bazel-bin/repl",
+      "cwd": "${workspaceRoot}",
+      "setupCommands": [
+        {
+          "description": "Load symbols with 'file' command",
+          "text": "file ${workspaceFolder}/bazel-bin/repl",
+          "ignoreFailures": false
+        },
+      ],
+      // "valuesFormatting": "parseText"
+    }
+  ]
+}

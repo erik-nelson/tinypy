@@ -3,8 +3,8 @@
 #include <functional>
 #include <optional>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include "stream.h"
 #include "token.h"
@@ -21,10 +21,10 @@ class Lexer {
 
   // Create a stream reader to read tokens from.
   // Example:
-  // 
+  //
   //     std::string source_code = "a = 5 * 3 + 2";
   //     Lexer lexer(std::move(source_code));
-  //     
+  //
   //     StreamReader<Token> stream = lexer.TokenStream();
   //     while (std::optional<Token> token = stream.Read()) {
   //       ...
@@ -36,14 +36,14 @@ class Lexer {
   // Whether we have any more source code available to lex.
   bool KeepGoing() const { return idx_ < source_.size(); }
 
-  // Increment `idx_`, eating the next character available in the provided 
-  // `source_` code. Populates the provided `buffer` with any new tokens encountered.
-  // Returns false when we have reached the end of `source_`.
+  // Increment `idx_`, eating the next character available in the provided
+  // `source_` code. Populates the provided `buffer` with any new tokens
+  // encountered. Returns false when we have reached the end of `source_`.
   bool EatChar(std::vector<Token>* buffer);
 
-  // Attempt to match various language constituents from `source_` at the 
-  // current `idx_`. Populates the provided `buffer` with any new tokens encountered.
-  // Returns whether a match was found.
+  // Attempt to match various language constituents from `source_` at the
+  // current `idx_`. Populates the provided `buffer` with any new tokens
+  // encountered. Returns whether a match was found.
   bool MatchIndentation(std::vector<Token>* buffer);
   bool MatchKeyword(std::vector<Token>* buffer);
   bool MatchOperatorOrDelimiter(std::vector<Token>* buffer);
@@ -55,7 +55,7 @@ class Lexer {
 
   // Current indentation level, in number of tab widths.
   int indentation_ = 0;
-  
+
   // Raw source code.
   std::string source_;
 
@@ -64,5 +64,6 @@ class Lexer {
   Stream<Token> tokens_;
 };
 
-// Standalone helper function that lexes the input source code to tokens in one call.
+// Standalone helper function that lexes the input source code to tokens in one
+// call.
 std::vector<Token> Lex(std::string source);

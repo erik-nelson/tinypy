@@ -1,10 +1,12 @@
-#include "gtest/gtest.h"
 #include "stream.h"
+
+#include "gtest/gtest.h"
 
 TEST(Stream, TestStream) {
   // The producer counts to 5, and is then finished.
   int value = 0;
-  Stream<int>::FillCallback fill_callback = [&](std::vector<int>* buffer) -> bool {
+  Stream<int>::FillCallback fill_callback =
+      [&](std::vector<int>* buffer) -> bool {
     if (value >= 5) return false;
     buffer->push_back(value++);
     return true;
@@ -24,7 +26,7 @@ TEST(Stream, TestStream) {
   for (size_t i = 0; i < 10; ++i) {
     auto peeked = reader.Peek();
     ASSERT_TRUE(peeked.has_value());
-    EXPECT_EQ(peeked.value(), 0);
+    EXPECT_EQ(*peeked.value(), 0);
   }
   ASSERT_EQ(value, 1);
   EXPECT_FALSE(reader.Finished());
@@ -39,7 +41,7 @@ TEST(Stream, TestStream) {
   EXPECT_FALSE(reader.Finished());
   EXPECT_FALSE(reader.Depleted());
   EXPECT_TRUE(reader.Empty());
-  
+
   // Advance past the second value, consuming it.
   EXPECT_TRUE(reader.Advance());
   EXPECT_TRUE(reader.Empty());
@@ -47,7 +49,7 @@ TEST(Stream, TestStream) {
   // Check the third value.
   auto peeked = reader.Peek();
   ASSERT_TRUE(peeked.has_value());
-  EXPECT_EQ(peeked.value(), 2);
+  EXPECT_EQ(*peeked.value(), 2);
   EXPECT_EQ(value, 3);
   EXPECT_FALSE(reader.Finished());
   EXPECT_FALSE(reader.Depleted());
@@ -75,7 +77,7 @@ TEST(Stream, TestStream) {
   EXPECT_FALSE(reader.Peek().has_value());
   EXPECT_FALSE(reader.Read().has_value());
   EXPECT_FALSE(reader.Advance());
-  
+
   // Still finished/depleted/empty after attempting redundant reads.
   EXPECT_TRUE(reader.Finished());
   EXPECT_TRUE(reader.Depleted());

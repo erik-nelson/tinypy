@@ -1,5 +1,5 @@
-#include <string>
 #include <iostream>
+#include <string>
 
 #include "interpreter.h"
 #include "version.h"
@@ -20,13 +20,14 @@ int main(int argc, char** argv) {
 
     // Catch request to exit.
     if (input == "exit()") {
-        break;
+      break;
     }
-  
+
     // Interpret user input.
     try {
       interpreter.Interpret(input);
     } catch (const std::exception& ex) {
+      std::cerr << "Caught exception:\n\t" << ex.what();
       // TODO(erik): Handle exceptions.
     }
   }
