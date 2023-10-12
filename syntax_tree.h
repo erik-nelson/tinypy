@@ -5,22 +5,21 @@
 #include <string>
 
 #include "syntax_tree_node.h"
+#include "syntax_tree_visitor.h"
 
 class SyntaxTree {
  public:
   SyntaxTree();
+  explicit SyntaxTree(SyntaxTreeNode::Ptr root);
+  SyntaxTree(SyntaxTree&&) = default;
+  SyntaxTree& operator=(SyntaxTree&&) noexcept = default;
 
-  // Debug printing.
-  std::string DebugString() const;
+  // Traverse the syntax tree, calling the provided visitor at each node.
+  void Traverse(SyntaxTreeVisitor* visitor) const;
 
  private:
   // Parser can access our root node to build the tree.
   friend class Parser;
-
-  // Traverse the syntax tree, calling the provided visitor at each node.
-  using VisitCallback = std::function<void(SyntaxTreeNode*)>;
-  void Traverse(VisitCallback visit);
-
   SyntaxTreeNode::Ptr root_;
 };
 

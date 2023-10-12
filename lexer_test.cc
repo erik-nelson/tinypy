@@ -1,4 +1,3 @@
-
 #include "lexer.h"
 
 #include "gmock/gmock.h"

@@ -39,7 +39,6 @@ cc_library(
   deps = [
     ":stream",
     ":syntax_tree",
-    ":syntax_tree_node",
     ":token",
   ],
 )
@@ -70,16 +69,28 @@ cc_test(
 
 cc_library(
   name = "syntax_tree",
-  srcs = ["syntax_tree.cc"],
-  hdrs = ["syntax_tree.h"],
-  deps = [":syntax_tree_node"],
+  srcs = [
+    "syntax_tree.cc",
+    "syntax_tree_node.cc",
+    "syntax_tree_visitor.cc",
+  ],
+  hdrs = [
+    "syntax_tree.h",
+    "syntax_tree_node.h",
+    "syntax_tree_visitor.h",  
+  ],
+  deps = [":types"],
 )
 
-cc_library(
-  name = "syntax_tree_node",
-  srcs = ["syntax_tree_node.cc"],
-  hdrs = ["syntax_tree_node.h"],
-  deps = [":types"],
+cc_test(
+  name = "syntax_tree_test",
+  srcs = ["syntax_tree_test.cc"],
+  deps = [
+    ":lexer",
+    ":parser",
+    ":syntax_tree",
+    "@gtest//:gtest_main",
+  ],
 )
 
 cc_library(

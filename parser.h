@@ -69,7 +69,8 @@ class Parser {
   explicit Parser(StreamReader<Token> tokens, Mode mode = Mode::MODULE);
 
   // TODO(erik): Describe.
-  SyntaxTree Parse();
+  SyntaxTree& Parse() &;
+  SyntaxTree&& Parse() &&;
 
  private:
   // The body of a block of python code is a series of statements.

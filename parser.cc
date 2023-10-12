@@ -2,28 +2,6 @@
 
 Parser::Parser(StreamReader<Token> tokens, Mode mode)
     : tokens_(std::move(tokens)), mode_(mode) {
-  // Top level node in the syntax tree corresponds to execution mode.
-  switch (mode_) {
-    case Mode::MODULE: {
-      auto root = std::make_unique<Module>();
-      blocks_.push(&root->body);
-      syntax_tree_.root_ = std::move(root);
-      break;
-    }
-
-    case Mode::INTERACTIVE: {
-      auto root = std::make_unique<Interactive>();
-      blocks_.push(&root->body);
-      syntax_tree_.root_ = std::move(root);
-      break;
-    }
-
-    case Mode::EXPRESSION: {
-      syntax_tree_.root_ = std::make_unique<Expression>();
-      break;
-    }
-  }
-
 #if 0  // TODO(erik): Reorganize.
   // Statement rules.
   stmt_rules_[Token::Type::DEF];  // function def
@@ -204,16 +182,35 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
                           .precedence = TokenPrecedence::NONE};
 }
 
-SyntaxTree Parser::Parse() {
+SyntaxTree& Parser::Parse() & {
+  // Top level node in the syntax tree corresponds to execution mode.
   if (mode_ == Mode::EXPRESSION) {
     // In EXPRESSION mode we expect a single expression.
+    auto root = std::make_unique<Expression>();
     ParseExpression();
+    root->body = PopExpression();
+    syntax_tree_.root_ = std::move(root);
   } else {  // MODULE or INTERACTIVE mode.
     // In other modes we expect a sequence of statements.
+    if (mode_ == Mode::MODULE) {
+      auto root = std::make_unique<Module>();
+      blocks_.push(&root->body);
+      syntax_tree_.root_ = std::move(root);
+    } else {
+      auto root = std::make_unique<Interactive>();
+      blocks_.push(&root->body);
+      syntax_tree_.root_ = std::move(root);
+    }
+
     while (!tokens_.Depleted()) ParseStatement();
   }
 
-  return {};
+  return syntax_tree_;
+}
+
+SyntaxTree&& Parser::Parse() && {
+  Parse();
+  return std::move(syntax_tree_);
 }
 
 void Parser::ParseStatement() {
@@ -348,6 +345,7 @@ void Parser::PushStatement(StatementNode::Ptr statement) {
 }
 
 ExpressionNode::Ptr Parser::PopExpression() {
+  if (exprs_.empty()) return nullptr;
   ExpressionNode::Ptr expression = std::move(exprs_.top());
   exprs_.pop();
   return expression;
