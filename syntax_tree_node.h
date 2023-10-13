@@ -20,8 +20,8 @@ enum class BooleanOpType { AND, OR };
 enum class UnaryOpType {
   INVERT,
   NOT,
-  ADD,
-  NEGATE,
+  POSITIVE,
+  NEGATIVE,
 };
 
 enum class BinaryOpType {
@@ -120,7 +120,10 @@ struct Expression : public ModuleNode {
 
 // struct Return : public StatementNode {};
 
-// struct Delete : public StatementNode {};
+struct Delete : public StatementNode {
+  std::vector<ExpressionNode::Ptr> targets;
+  void Visit(SyntaxTreeVisitor* visitor) override;
+};
 
 struct Assign : public StatementNode {
   std::vector<ExpressionNode::Ptr> targets;

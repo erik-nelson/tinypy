@@ -73,6 +73,13 @@ class Parser {
   SyntaxTree&& Parse() &&;
 
  private:
+  // Consumes the next token if it matches the provided type.
+  bool Match(Token::Type type) const;
+
+  // Throws an exception if the next token does not exist, or does not match
+  // the provided type.
+  void Expect(Token::Type type) const;
+
   // The body of a block of python code is a series of statements.
   // Parse a single statement. Each statement potentially includes a set of
   // expressions.
@@ -86,8 +93,8 @@ class Parser {
   // void ParseAsyncStatement();
   // void ParseClassStatement();
   // void ParseReturnStatement();
-  // void ParseDeleteStatement();
-  // void ParseAssignStatement();
+  void ParseDeleteStatement();
+  void ParseAssignStatement();
   // void ParseAugAssignStatement();
   // void ParseForStatement();
   // void ParseWhileStatement();
@@ -106,8 +113,8 @@ class Parser {
   // Expressions.
   // void ParseBooleanOpExpression();
   // void ParseNamedExpression();
-  void ParseUnaryOpExpression();
   void ParseBinaryOpExpression();
+  void ParseUnaryOpExpression();
   // void ParseLambdaExpression();
   // void ParseIfExpression();
   // void ParseListExpression();
@@ -120,7 +127,7 @@ class Parser {
   void ParseConstantExpression();
   // void ParseAttributeExpression();
   // void ParseStarredExpression();
-  // void ParseNameExpression();
+  void ParseNameExpression();
   // void ParseSliceExpression();
 
   // TODO(erik): Describe when finished.
@@ -132,7 +139,7 @@ class Parser {
 
   // A stream of tokens generated from source code, which are converted
   // to statements and expressions in the syntax tree when read.
-  StreamReader<Token> tokens_;
+  mutable StreamReader<Token> tokens_;
 
   // Top-level execution mode.
   Mode mode_;

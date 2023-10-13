@@ -1,5 +1,9 @@
 #include "parser.h"
 
+#include <optional>
+
+#include "syntax_tree_node.h"
+
 Parser::Parser(StreamReader<Token> tokens, Mode mode)
     : tokens_(std::move(tokens)), mode_(mode) {
 #if 0  // TODO(erik): Reorganize.
@@ -82,8 +86,41 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
   expr_rules_[Token::Type::COLON];  // slice
 #endif
 
-  // Statements.
-  // TODO(erik)
+  // Rule for DEL token.
+  stmt_rules_[Token::Type::DEL] = [&] { ParseDeleteStatement(); };
+
+  // Rule for ASSIGN token.
+  stmt_rules_[Token::Type::ASSIGN] = [&] { ParseAssignStatement(); };
+
+  // Rule for NOT token.
+  expr_rules_[Token::Type::NOT] =
+      ParseExpressionRule{.prefix = [&] { ParseUnaryOpExpression(); },
+                          .infix = nullptr,
+                          .precedence = TokenPrecedence::NOT};
+
+  // Rule for IDENTIFIER token.
+  expr_rules_[Token::Type::IDENTIFIER] =
+      ParseExpressionRule{.prefix = [&] { ParseNameExpression(); },
+                          .infix = nullptr,
+                          .precedence = TokenPrecedence::NONE};
+
+  // Rule for INTEGER token.
+  expr_rules_[Token::Type::INTEGER] =
+      ParseExpressionRule{.prefix = [&] { ParseConstantExpression(); },
+                          .infix = nullptr,
+                          .precedence = TokenPrecedence::NONE};
+
+  // Rule for FLOAT token.
+  expr_rules_[Token::Type::FLOAT] =
+      ParseExpressionRule{.prefix = [&] { ParseConstantExpression(); },
+                          .infix = nullptr,
+                          .precedence = TokenPrecedence::NONE};
+
+  // Rule for STRING token.
+  expr_rules_[Token::Type::STRING] =
+      ParseExpressionRule{.prefix = [&] { ParseConstantExpression(); },
+                          .infix = nullptr,
+                          .precedence = TokenPrecedence::NONE};
 
   // Rule for PLUS token.
   expr_rules_[Token::Type::PLUS] =
@@ -103,14 +140,20 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
                           .infix = [&] { ParseBinaryOpExpression(); },
                           .precedence = TokenPrecedence::MULTIPLY_DIVIDE};
 
-  // Rule for MATMUL token.
-  expr_rules_[Token::Type::MATMUL] =
+  // Rule for POWER token.
+  expr_rules_[Token::Type::POWER] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseBinaryOpExpression(); },
+                          .precedence = TokenPrecedence::POWER};
+
+  // Rule for DIVIDE token.
+  expr_rules_[Token::Type::DIVIDE] =
       ParseExpressionRule{.prefix = nullptr,
                           .infix = [&] { ParseBinaryOpExpression(); },
                           .precedence = TokenPrecedence::MULTIPLY_DIVIDE};
 
-  // Rule for DIVIDE token.
-  expr_rules_[Token::Type::DIVIDE] =
+  // Rule for FLOOR_DIVIDE token.
+  expr_rules_[Token::Type::FLOOR_DIVIDE] =
       ParseExpressionRule{.prefix = nullptr,
                           .infix = [&] { ParseBinaryOpExpression(); },
                           .precedence = TokenPrecedence::MULTIPLY_DIVIDE};
@@ -121,11 +164,11 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
                           .infix = [&] { ParseBinaryOpExpression(); },
                           .precedence = TokenPrecedence::MULTIPLY_DIVIDE};
 
-  // Rule for POWER token.
-  expr_rules_[Token::Type::POWER] =
+  // Rule for MATMUL token.
+  expr_rules_[Token::Type::MATMUL] =
       ParseExpressionRule{.prefix = nullptr,
                           .infix = [&] { ParseBinaryOpExpression(); },
-                          .precedence = TokenPrecedence::POWER};
+                          .precedence = TokenPrecedence::MULTIPLY_DIVIDE};
 
   // Rule for LEFT_SHIFT token.
   expr_rules_[Token::Type::LEFT_SHIFT] =
@@ -139,6 +182,12 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
                           .infix = [&] { ParseBinaryOpExpression(); },
                           .precedence = TokenPrecedence::BITWISE_SHIFT};
 
+  // Rule for BITWISE_AND token.
+  expr_rules_[Token::Type::BITWISE_AND] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseBinaryOpExpression(); },
+                          .precedence = TokenPrecedence::BITWISE_AND};
+
   // Rule for BITWISE_OR token.
   expr_rules_[Token::Type::BITWISE_OR] =
       ParseExpressionRule{.prefix = nullptr,
@@ -151,35 +200,11 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
                           .infix = [&] { ParseBinaryOpExpression(); },
                           .precedence = TokenPrecedence::BITWISE_XOR};
 
-  // Rule for BITWISE_AND token.
-  expr_rules_[Token::Type::BITWISE_AND] =
-      ParseExpressionRule{.prefix = nullptr,
-                          .infix = [&] { ParseBinaryOpExpression(); },
-                          .precedence = TokenPrecedence::BITWISE_AND};
-
-  // Rule for FLOOR_DIVIDE token.
-  expr_rules_[Token::Type::FLOOR_DIVIDE] =
-      ParseExpressionRule{.prefix = nullptr,
-                          .infix = [&] { ParseBinaryOpExpression(); },
-                          .precedence = TokenPrecedence::MULTIPLY_DIVIDE};
-
-  // Rule for INTEGER token.
-  expr_rules_[Token::Type::INTEGER] =
-      ParseExpressionRule{.prefix = [&] { ParseConstantExpression(); },
+  // Rule for INVERT token.
+  expr_rules_[Token::Type::INVERT] =
+      ParseExpressionRule{.prefix = [&] { ParseUnaryOpExpression(); },
                           .infix = nullptr,
-                          .precedence = TokenPrecedence::NONE};
-
-  // Rule for FLOAT token.
-  expr_rules_[Token::Type::FLOAT] =
-      ParseExpressionRule{.prefix = [&] { ParseConstantExpression(); },
-                          .infix = nullptr,
-                          .precedence = TokenPrecedence::NONE};
-
-  // Rule for STRING token.
-  expr_rules_[Token::Type::STRING] =
-      ParseExpressionRule{.prefix = [&] { ParseConstantExpression(); },
-                          .infix = nullptr,
-                          .precedence = TokenPrecedence::NONE};
+                          .precedence = TokenPrecedence::BITWISE_NOT};
 }
 
 SyntaxTree& Parser::Parse() & {
@@ -190,7 +215,9 @@ SyntaxTree& Parser::Parse() & {
     ParseExpression();
     root->body = PopExpression();
     syntax_tree_.root_ = std::move(root);
-  } else {  // MODULE or INTERACTIVE mode.
+  }
+
+  else {  // MODULE or INTERACTIVE mode.
     // In other modes we expect a sequence of statements.
     if (mode_ == Mode::MODULE) {
       auto root = std::make_unique<Module>();
@@ -202,7 +229,16 @@ SyntaxTree& Parser::Parse() & {
       syntax_tree_.root_ = std::move(root);
     }
 
+    // Parse all available statements.
     while (!tokens_.Depleted()) ParseStatement();
+
+    // If at the end of parsing we still have leftover expressions,
+    // convert them to a sequence of individual expression statements.
+    while (auto expr = PopExpression()) {
+      auto stmt = std::make_unique<Expr>();
+      stmt->expr = std::move(expr);
+      PushStatement(std::move(stmt));
+    }
   }
 
   return syntax_tree_;
@@ -211,6 +247,31 @@ SyntaxTree& Parser::Parse() & {
 SyntaxTree&& Parser::Parse() && {
   Parse();
   return std::move(syntax_tree_);
+}
+
+bool Parser::Match(Token::Type type) const {
+  if (auto next_token = tokens_.Peek();
+      next_token.has_value() && next_token.value()->type == type) {
+    tokens_.Advance();
+    return true;
+  }
+  return false;
+}
+
+void Parser::Expect(Token::Type type) const {
+  std::optional<const Token*> next_token = tokens_.Peek();
+  if (!next_token.has_value()) {
+    std::string err = "Failed to match token ";
+    err += kTokenTypeToString.at(type);
+    err += " (no more tokens available).";
+    throw std::runtime_error(err);
+  }
+  if (next_token.value()->type != type) {
+    std::string err = "Failed to match token ";
+    err += kTokenTypeToString.at(type);
+    err += " (got " + kTokenTypeToString.at(next_token.value()->type) + ").";
+    throw std::runtime_error(err);
+  }
 }
 
 void Parser::ParseStatement() {
@@ -222,11 +283,9 @@ void Parser::ParseStatement() {
     // Apply statement rule to the token.
     it->second();
   } else {
-    // Couldn't find a matching statement. Parse as an expression statement.
+    // Couldn't find a matching statement. Parse as an expression. Internally
+    // this stores the expression so that subsequent statements can use it.
     ParseExpression();
-    auto stmt = std::make_unique<Expr>();
-    stmt->expr = PopExpression();
-    PushStatement(std::move(stmt));
   }
 }
 
@@ -254,18 +313,66 @@ void Parser::ParseExpression(TokenPrecedence precedence) {
   // Apply infix rule(s).
   while (!tokens_.Depleted() &&
          static_cast<int>(rule_precedence) >= static_cast<int>(precedence)) {
-    next_token = tokens_.Peek();
-    const ParseExpressionRule& rule = expr_rules_.at((*next_token)->type);
-    rule_precedence = rule.precedence;
-    rule.infix();
+    const Token::Type next_type = (*tokens_.Peek())->type;
+    auto it = expr_rules_.find(next_type);
+    if (it != expr_rules_.end()) {
+      const ParseExpressionRule& rule = it->second;
+      rule_precedence = rule.precedence;
+      rule.infix();
+    } else {
+      break;
+    }
   }
 }
 
-void Parser::ParseUnaryOpExpression() {
-  std::optional<Token> token = tokens_.Read();
+void Parser::ParseDeleteStatement() {
+  // Eat preceding DEL token.
+  Match(Token::Type::DEL);
 
-  puts("Parse unary expression for token:");
-  std::cout << "\t" << *token;
+  puts("Parse delete statement");
+
+  // Parse comma-separated list of names.
+  auto stmt = std::make_unique<Delete>();
+  do {
+    Expect(Token::Type::IDENTIFIER);
+    ParseNameExpression();
+
+    auto expr = PopExpression();
+    dynamic_cast<Name*>(expr.get())->ctx_type = ExprContextType::DEL;
+    stmt->targets.emplace_back(std::move(expr));
+  } while (Match(Token::Type::COMMA));
+
+  PushStatement(std::move(stmt));
+}
+
+void Parser::ParseAssignStatement() {
+  puts("Parse assign statement");
+
+  // Match expressions until we run out of '=' tokens.
+  // E.g. a = b = c = 3.
+  std::vector<ExpressionNode::Ptr> exprs;
+  exprs.emplace_back(PopExpression());
+  while (Match(Token::Type::ASSIGN)) {
+    ParseExpression();
+    exprs.emplace_back(PopExpression());
+  }
+
+  // The final parsed expression is the value of the assignment.
+  auto stmt = std::make_unique<Assign>();
+  stmt->value = std::move(exprs.back());
+  exprs.pop_back();
+
+  // All preceding expressions are the targets.
+  stmt->targets = std::move(exprs);
+
+  // Any variables we are storing to need a STORE context.
+  for (auto& expr : stmt->targets) {
+    if (auto* name = dynamic_cast<Name*>(expr.get())) {
+      name->ctx_type = ExprContextType::STORE;
+    }
+  }
+
+  PushStatement(std::move(stmt));
 }
 
 void Parser::ParseBinaryOpExpression() {
@@ -315,6 +422,34 @@ void Parser::ParseBinaryOpExpression() {
   PushExpression(std::move(expr));
 }
 
+void Parser::ParseUnaryOpExpression() {
+  std::optional<Token> token = tokens_.Read();
+
+  puts("Parse unary expression for token:");
+  std::cout << "\t" << *token;
+
+  auto expr = std::make_unique<UnaryOp>();
+  expr->op_type = [&]() {
+    switch (token->type) {
+      case Token::Type::PLUS:
+        return UnaryOpType::POSITIVE;
+      case Token::Type::MINUS:
+        return UnaryOpType::NEGATIVE;
+      case Token::Type::NOT:
+        return UnaryOpType::NOT;
+      case Token::Type::INVERT:
+        return UnaryOpType::INVERT;
+      default:
+        throw std::runtime_error("Encountered unexpected unary operation: " +
+                                 token->DebugString());
+    }
+  }();
+
+  ParseExpression(expr_rules_[token->type].precedence);
+  expr->operand = PopExpression();
+  PushExpression(std::move(expr));
+}
+
 void Parser::ParseConstantExpression() {
   std::optional<Token> token = tokens_.Read();
 
@@ -337,6 +472,18 @@ void Parser::ParseConstantExpression() {
         return NoneType();
     }
   }();
+  PushExpression(std::move(expr));
+}
+
+void Parser::ParseNameExpression() {
+  std::optional<Token> token = tokens_.Read();
+
+  puts("Parse name expression for token:");
+  std::cout << "\t" << *token;
+
+  auto expr = std::make_unique<Name>();
+  expr->id = std::move(token->value.value());
+  expr->ctx_type = ExprContextType::LOAD;
   PushExpression(std::move(expr));
 }
 

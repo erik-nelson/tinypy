@@ -76,3 +76,63 @@ TEST(SyntaxTree, BinaryAddition) {
 
   DebugPrint(source, tree);
 }
+
+TEST(SyntaxTree, Delete) {
+  std::string source = "del a, Foo, bar";
+
+  SyntaxTree tree = BuildSyntaxTree(source);
+
+  DebugStringVisitor visitor;
+  tree.Traverse(&visitor);
+  EXPECT_EQ(visitor.str,
+            R"(Module(
+    body=[
+        Delete(
+            targets=[
+                Name(id='a', ctx=Del)
+                Name(id='Foo', ctx=Del)
+                Name(id='bar', ctx=Del)])])
+)");
+
+  DebugPrint(source, tree);
+}
+
+TEST(SyntaxTree, AssignSingle) {
+  std::string source = "a = 5";
+  SyntaxTree tree = BuildSyntaxTree(source);
+
+  DebugStringVisitor visitor;
+  tree.Traverse(&visitor);
+  EXPECT_EQ(visitor.str,
+            R"(Module(
+    body=[
+        Assign(
+            targets=[
+                Name(id='a', ctx=Store)],
+            value=Constant(value=Int: 5))])
+)");
+
+  DebugPrint(source, tree);
+}
+
+TEST(SyntaxTree, AssignMulti) {
+  std::string source = "a = b = c + 5";
+  SyntaxTree tree = BuildSyntaxTree(source);
+
+  DebugStringVisitor visitor;
+  tree.Traverse(&visitor);
+  EXPECT_EQ(visitor.str,
+            R"(Module(
+    body=[
+        Assign(
+            targets=[
+                Name(id='a', ctx=Store)
+                Name(id='b', ctx=Store)],
+            value=BinaryOp(
+                lhs=Name(id='c', ctx=Load),
+                op=Add,
+                rhs=Constant(value=Int: 5)))])
+)");
+
+  DebugPrint(source, tree);
+}

@@ -61,7 +61,35 @@ void DebugStringVisitor::Visit(Expression* node) {
   indentation -= 2;
 }
 
-void DebugStringVisitor::Visit(Assign* node) {}
+void DebugStringVisitor::Visit(Delete* node) {
+  Append("Delete(");
+  indentation += 1;
+  AppendLine("targets=[");
+  indentation += 1;
+  for (const auto& expr : node->targets) {
+    AppendLine("");
+    expr->Visit(this);
+  }
+  Append("])");
+  indentation -= 2;
+}
+
+void DebugStringVisitor::Visit(Assign* node) {
+  Append("Assign(");
+  indentation += 1;
+  AppendLine("targets=[");
+  indentation += 1;
+  for (const auto& expr : node->targets) {
+    AppendLine("");
+    expr->Visit(this);
+  }
+  Append("],");
+  indentation -= 1;
+  AppendLine("value=");
+  node->value->Visit(this);
+  Append(")");
+  indentation -= 1;
+}
 
 void DebugStringVisitor::Visit(Expr* node) {
   Append("Expr(");
@@ -116,7 +144,28 @@ void DebugStringVisitor::Visit(BinaryOp* node) {
   Append(")");
 }
 
-void DebugStringVisitor::Visit(UnaryOp* node) {}
+void DebugStringVisitor::Visit(UnaryOp* node) {
+  Append("UnaryOp(");
+  indentation += 1;
+  AppendLine("op=");
+  Append([&] {
+    switch (node->op_type) {
+      case UnaryOpType::INVERT:
+        return "Invert,";
+      case UnaryOpType::NOT:
+        return "Not,";
+      case UnaryOpType::POSITIVE:
+        return "Positive,";
+      case UnaryOpType::NEGATIVE:
+        return "Negative,";
+    }
+    return "";
+  }());
+  AppendLine("operand=");
+  node->operand->Visit(this);
+  indentation -= 1;
+  Append(")");
+}
 
 void DebugStringVisitor::Visit(Constant* node) {
   Append("Constant(value=");
@@ -124,7 +173,24 @@ void DebugStringVisitor::Visit(Constant* node) {
   Append(")");
 }
 
-void DebugStringVisitor::Visit(Name* node) {}
+void DebugStringVisitor::Visit(Name* node) {
+  puts("name???");
+  Append("Name(id='");
+  Append(node->id);
+  Append("', ctx=");
+  Append([&] {
+    switch (node->ctx_type) {
+      case ExprContextType::LOAD:
+        return "Load";
+      case ExprContextType::STORE:
+        return "Store";
+      case ExprContextType::DEL:
+        return "Del";
+    }
+    return "";
+  }());
+  Append(")");
+}
 
 void DebugStringVisitor::Append(std::string text) { str += std::move(text); }
 

@@ -11,10 +11,11 @@ INSTANTIATE_VISIT(Interactive)
 INSTANTIATE_VISIT(Expression)
 
 // Statements.
+INSTANTIATE_VISIT(Delete);
 INSTANTIATE_VISIT(Assign)
 INSTANTIATE_VISIT(Expr)
 
-// Expressions
+// Expressions.
 INSTANTIATE_VISIT(BinaryOp)
 INSTANTIATE_VISIT(UnaryOp)
 INSTANTIATE_VISIT(Constant)

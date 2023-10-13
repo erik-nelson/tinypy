@@ -11,6 +11,7 @@ struct SyntaxTreeVisitor {
   virtual void Visit(Expression* node) = 0;
 
   // Statement nodes.
+  virtual void Visit(Delete* node) = 0;
   virtual void Visit(Assign* node) = 0;
   virtual void Visit(Expr* node) = 0;
 
@@ -24,20 +25,6 @@ struct SyntaxTreeVisitor {
 #if 0
 // Visitor that evaluates the syntax tree.
 struct EvaluateVisitor : public SyntaxTreeVisitor {
-  // Module nodes.
-  void Visit(Module* node);
-  void Visit(Interactive* node);
-  void Visit(Expression* node);
-
-  // Statement nodes.
-  void Visit(Assign* node);
-  void Visit(Expr* node);
-
-  // Expression nodes.
-  void Visit(BinaryOp* node);
-  void Visit(UnaryOp* node);
-  void Visit(Constant* node);
-  void Visit(Name* node);
 };
 #endif
 
@@ -49,6 +36,7 @@ struct DebugStringVisitor : public SyntaxTreeVisitor {
   void Visit(Expression* node);
 
   // Statement nodes.
+  void Visit(Delete* node);
   void Visit(Assign* node);
   void Visit(Expr* node);
 
