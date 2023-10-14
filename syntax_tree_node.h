@@ -141,7 +141,12 @@ struct Assign : public StatementNode {
 
 // struct While : public StatementNode {};
 
-// struct If : public StatementNode {};
+struct If : public StatementNode {
+  ExpressionNode::Ptr test;
+  std::vector<StatementNode::Ptr> then_body;
+  std::vector<StatementNode::Ptr> else_body;
+  void Visit(SyntaxTreeVisitor* visitor) override;
+};
 
 // struct With : public StatementNode {};
 
@@ -221,7 +226,12 @@ struct UnaryOp : public ExpressionNode {
 
 // struct YieldFrom : public ExpressionNode {};
 
-// struct Compare : public ExpressionNode {};
+struct Compare : public ExpressionNode {
+  ExpressionNode::Ptr lhs;
+  std::vector<CompareOpType> ops;
+  std::vector<ExpressionNode::Ptr> comparators;
+  void Visit(SyntaxTreeVisitor* visitor) override;
+};
 
 // struct Call : public ExpressionNode {};
 

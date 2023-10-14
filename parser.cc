@@ -4,6 +4,34 @@
 
 #include "syntax_tree_node.h"
 
+namespace {
+// Helper that pushes a provided value onto a provided deque.
+template <typename T, typename U>
+void Push(std::deque<T>* values, U&& value) {
+  values->push_back(std::forward<U>(value));
+}
+
+// Helper that pops the top value from the provided deque, returning a default
+// constructed value if none was available.
+template <typename T>
+T Pop(std::deque<T>* values) {
+  if (values->empty()) return T{};
+  T value = std::move(values->back());
+  values->pop_back();
+  return value;
+}
+
+// Specialization for unique_ptr values.
+template <typename T, typename = std::enable_if_t<
+                          !std::is_same_v<T, std::remove_reference_t<T>>>>
+std::decay_t<T> Pop(std::deque<T>* values) {
+  if (values->empty()) return std::decay_t<T>{};
+  std::decay_t<T> value = std::move(values->back());
+  values->pop_back();
+  return value;
+}
+}  // namespace
+
 Parser::Parser(StreamReader<Token> tokens, Mode mode)
     : tokens_(std::move(tokens)), mode_(mode) {
 #if 0  // TODO(erik): Reorganize.
@@ -86,11 +114,37 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
   expr_rules_[Token::Type::COLON];  // slice
 #endif
 
+  // ==, !=, <, <=, >, >=, is, is not, in, not in
+
   // Rule for DEL token.
   stmt_rules_[Token::Type::DEL] = [&] { ParseDeleteStatement(); };
 
-  // Rule for ASSIGN token.
-  stmt_rules_[Token::Type::ASSIGN] = [&] { ParseAssignStatement(); };
+  // Rule for IF token.
+  stmt_rules_[Token::Type::IF] = [&] { ParseIfStatement(); };
+
+  // Rule for IN token.
+  expr_rules_[Token::Type::IN] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for IS token.
+  expr_rules_[Token::Type::IS] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for IS_NOT token.
+  expr_rules_[Token::Type::IS_NOT] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for NOT_IN token.
+  expr_rules_[Token::Type::NOT_IN] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
 
   // Rule for NOT token.
   expr_rules_[Token::Type::NOT] =
@@ -205,57 +259,90 @@ Parser::Parser(StreamReader<Token> tokens, Mode mode)
       ParseExpressionRule{.prefix = [&] { ParseUnaryOpExpression(); },
                           .infix = nullptr,
                           .precedence = TokenPrecedence::BITWISE_NOT};
+
+  // Rule for LESS_THAN token.
+  expr_rules_[Token::Type::LESS_THAN] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for LESS_EQUAL token.
+  expr_rules_[Token::Type::LESS_EQUAL] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for GREATER_EQUAL token.
+  expr_rules_[Token::Type::GREATER_EQUAL] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for GREATER_THAN token.
+  expr_rules_[Token::Type::GREATER_THAN] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for EQUALS token.
+  expr_rules_[Token::Type::EQUALS] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for NOT_EQUALS token.
+  expr_rules_[Token::Type::NOT_EQUALS] =
+      ParseExpressionRule{.prefix = nullptr,
+                          .infix = [&] { ParseCompareExpression(); },
+                          .precedence = TokenPrecedence::COMPARISON};
+
+  // Rule for ASSIGN token.
+  stmt_rules_[Token::Type::ASSIGN] = [&] { ParseAssignStatement(); };
 }
 
-SyntaxTree& Parser::Parse() & {
+void Parser::Parse() {
   // Top level node in the syntax tree corresponds to execution mode.
   if (mode_ == Mode::EXPRESSION) {
     // In EXPRESSION mode we expect a single expression.
-    auto root = std::make_unique<Expression>();
     ParseExpression();
-    root->body = PopExpression();
+
+    auto root = std::make_unique<Expression>();
+    root->body = Pop(&exprs_);
     syntax_tree_.root_ = std::move(root);
   }
 
   else {  // MODULE or INTERACTIVE mode.
-    // In other modes we expect a sequence of statements.
+    // In other modes we expect a block of statements.
+    ParseBlock();
+
     if (mode_ == Mode::MODULE) {
       auto root = std::make_unique<Module>();
-      blocks_.push(&root->body);
+      root->body = Pop(&blocks_);
       syntax_tree_.root_ = std::move(root);
     } else {
       auto root = std::make_unique<Interactive>();
-      blocks_.push(&root->body);
+      root->body = Pop(&blocks_);
       syntax_tree_.root_ = std::move(root);
     }
-
-    // Parse all available statements.
-    while (!tokens_.Depleted()) ParseStatement();
-
-    // If at the end of parsing we still have leftover expressions,
-    // convert them to a sequence of individual expression statements.
-    while (auto expr = PopExpression()) {
-      auto stmt = std::make_unique<Expr>();
-      stmt->expr = std::move(expr);
-      PushStatement(std::move(stmt));
-    }
   }
-
-  return syntax_tree_;
 }
 
-SyntaxTree&& Parser::Parse() && {
-  Parse();
-  return std::move(syntax_tree_);
+bool Parser::Peek(Token::Type type) const {
+  return !tokens_.Depleted() && (*tokens_.Peek())->type == type;
 }
 
 bool Parser::Match(Token::Type type) const {
-  if (auto next_token = tokens_.Peek();
-      next_token.has_value() && next_token.value()->type == type) {
+  if (Peek(type)) {
     tokens_.Advance();
     return true;
   }
+
   return false;
+}
+
+void Parser::Consume(Token::Type type) const {
+  Expect(type);
+  Match(type);
 }
 
 void Parser::Expect(Token::Type type) const {
@@ -274,18 +361,45 @@ void Parser::Expect(Token::Type type) const {
   }
 }
 
-void Parser::ParseStatement() {
-  std::optional<const Token*> next_token = tokens_.Peek();
-  if (!next_token) return;
+void Parser::ParseBlock() {
+  // Parse statements until a dedent, or depleted.
+  while (!tokens_.Depleted() && !Match(Token::Type::DEDENT)) {
+    ParseStatement();
+  }
 
-  auto it = stmt_rules_.find((*next_token)->type);
-  if (it != stmt_rules_.end()) {
-    // Apply statement rule to the token.
-    it->second();
-  } else {
+  // Push all parsed statements onto the current block.
+  Block block(std::make_move_iterator(stmts_.begin()),
+              std::make_move_iterator(stmts_.end()));
+  stmts_.clear();
+  Push(&blocks_, std::move(block));
+
+  // Remove any dedents afterwards.
+  while (Match(Token::Type::DEDENT));
+}
+
+void Parser::ParseStatement() {
+  while (!tokens_.Depleted() && !Match(Token::Type::NEWLINE)) {
+    std::optional<const Token*> next_token = tokens_.Peek();
+    if (!next_token) return;
+    std::cout << **next_token;
+    auto it = stmt_rules_.find((*next_token)->type);
+    
+    if (it != stmt_rules_.end()) {
+      // Apply statement rule to the token.
+      it->second();
+      break;
+    } 
+    
     // Couldn't find a matching statement. Parse as an expression. Internally
     // this stores the expression so that subsequent statements can use it.
     ParseExpression();
+  }
+
+  // Parse any remaining expression into an expression statement.
+  if (auto expr = Pop(&exprs_)) {
+    auto stmt = std::make_unique<Expr>();
+    stmt->expr = std::move(expr);
+    Push(&stmts_, std::move(stmt));
   }
 }
 
@@ -296,7 +410,7 @@ void Parser::ParseExpression(TokenPrecedence precedence) {
   // Syntax error if we can't find an expression match for this token.
   auto it = expr_rules_.find((*next_token)->type);
   if (it == expr_rules_.end()) {
-    throw std::runtime_error("Failed to parse token: " +
+    throw std::runtime_error("Encountered unexpected token: " +
                              (*next_token)->DebugString());
   }
 
@@ -306,17 +420,22 @@ void Parser::ParseExpression(TokenPrecedence precedence) {
     rule_precedence = rule.precedence;
     rule.prefix();
   } else {
-    throw std::runtime_error("Expected expression, got: " +
+    throw std::runtime_error("Expected unexpected token: " +
                              (*next_token)->DebugString());
   }
 
   // Apply infix rule(s).
   while (!tokens_.Depleted() &&
          static_cast<int>(rule_precedence) >= static_cast<int>(precedence)) {
-    const Token::Type next_type = (*tokens_.Peek())->type;
+    next_token = tokens_.Peek();
+    const Token::Type next_type = (*next_token)->type;
     auto it = expr_rules_.find(next_type);
     if (it != expr_rules_.end()) {
       const ParseExpressionRule& rule = it->second;
+      if (rule.infix == nullptr) {
+        throw std::runtime_error("Encountered null infix for token: " +
+                                 (*next_token)->DebugString());
+      }
       rule_precedence = rule.precedence;
       rule.infix();
     } else {
@@ -327,7 +446,7 @@ void Parser::ParseExpression(TokenPrecedence precedence) {
 
 void Parser::ParseDeleteStatement() {
   // Eat preceding DEL token.
-  Match(Token::Type::DEL);
+  Consume(Token::Type::DEL);
 
   puts("Parse delete statement");
 
@@ -337,12 +456,12 @@ void Parser::ParseDeleteStatement() {
     Expect(Token::Type::IDENTIFIER);
     ParseNameExpression();
 
-    auto expr = PopExpression();
+    auto expr = Pop(&exprs_);
     dynamic_cast<Name*>(expr.get())->ctx_type = ExprContextType::DEL;
     stmt->targets.emplace_back(std::move(expr));
   } while (Match(Token::Type::COMMA));
 
-  PushStatement(std::move(stmt));
+  Push(&stmts_, std::move(stmt));
 }
 
 void Parser::ParseAssignStatement() {
@@ -351,10 +470,10 @@ void Parser::ParseAssignStatement() {
   // Match expressions until we run out of '=' tokens.
   // E.g. a = b = c = 3.
   std::vector<ExpressionNode::Ptr> exprs;
-  exprs.emplace_back(PopExpression());
+  exprs.emplace_back(Pop(&exprs_));
   while (Match(Token::Type::ASSIGN)) {
     ParseExpression();
-    exprs.emplace_back(PopExpression());
+    exprs.emplace_back(Pop(&exprs_));
   }
 
   // The final parsed expression is the value of the assignment.
@@ -372,7 +491,61 @@ void Parser::ParseAssignStatement() {
     }
   }
 
-  PushStatement(std::move(stmt));
+  Push(&stmts_, std::move(stmt));
+}
+
+void Parser::ParseIfStatement() {
+  puts("Parse if statement");
+
+  // Eat preceding IF or ELIF token.
+  tokens_.Advance();
+
+  auto stmt = std::make_unique<If>();
+
+  // Parse the if test.
+  ParseExpression();
+  stmt->test = Pop(&exprs_);
+
+  Consume(Token::Type::COLON);
+  if (!Match(Token::Type::NEWLINE)) {
+    // The then branch appears on the same line:
+    // 'if <cond>: <then>'
+    //
+    // In this case, an else branch is not allowed.
+    ParseStatement();
+    stmt->then_body.emplace_back(Pop(&stmts_));
+  } 
+  
+  else {
+    // The then branch appears on the next line:
+    // if <cond>:
+    //     <then>
+    // else:
+    //     <else>
+    //
+    // Parse the then branch body.
+    Consume(Token::Type::INDENT);
+    ParseBlock();
+    stmt->then_body = Pop(&blocks_);
+
+    // Parse the else branch body. The else branch can consist of either
+    // an elif statement, in which case we recursively process a new if
+    // statement as part of our else branch, or an else statement.
+    if (Peek(Token::Type::ELIF)) {
+      ParseIfStatement();
+      stmt->else_body.emplace_back(Pop(&stmts_));
+    } else if (Match(Token::Type::ELSE)) {
+      // Parse else branch.
+      Consume(Token::Type::COLON);
+      Consume(Token::Type::NEWLINE);
+      Consume(Token::Type::INDENT);
+
+      ParseBlock();
+      stmt->else_body = Pop(&blocks_);
+    }
+  }
+
+  Push(&stmts_, std::move(stmt));
 }
 
 void Parser::ParseBinaryOpExpression() {
@@ -416,10 +589,10 @@ void Parser::ParseBinaryOpExpression() {
     }
   }();
 
-  expr->lhs = PopExpression();
+  expr->lhs = Pop(&exprs_);
   ParseExpression(expr_rules_[token->type].precedence);
-  expr->rhs = PopExpression();
-  PushExpression(std::move(expr));
+  expr->rhs = Pop(&exprs_);
+  Push(&exprs_, std::move(expr));
 }
 
 void Parser::ParseUnaryOpExpression() {
@@ -446,8 +619,73 @@ void Parser::ParseUnaryOpExpression() {
   }();
 
   ParseExpression(expr_rules_[token->type].precedence);
-  expr->operand = PopExpression();
-  PushExpression(std::move(expr));
+  expr->operand = Pop(&exprs_);
+  Push(&exprs_, std::move(expr));
+}
+
+void Parser::ParseCompareExpression() {
+  puts("Parse compare expression");
+
+  auto expr = std::make_unique<Compare>();
+  expr->lhs = Pop(&exprs_);
+
+  // Keep matching comparison operators until we can't anymore. For example,
+  // the expression 'a < b >= c not in d' has 3 comparison ops ('<', '>=',
+  // 'not in'), and 3 comparators ('b', 'c', 'd').
+  while (!tokens_.Depleted()) {
+    std::optional<const Token*> op_token = tokens_.Peek();
+    bool matched = true;
+    switch ((*op_token)->type) {
+      case Token::Type::EQUALS:
+        expr->ops.emplace_back(CompareOpType::EQUALS);
+        break;
+      case Token::Type::NOT_EQUALS:
+        expr->ops.emplace_back(CompareOpType::NOT_EQUALS);
+        break;
+      case Token::Type::LESS_THAN:
+        expr->ops.emplace_back(CompareOpType::LESS_THAN);
+        break;
+      case Token::Type::LESS_EQUAL:
+        expr->ops.emplace_back(CompareOpType::LESS_EQUAL);
+        break;
+      case Token::Type::GREATER_THAN:
+        expr->ops.emplace_back(CompareOpType::GREATER_THAN);
+        break;
+      case Token::Type::GREATER_EQUAL:
+        expr->ops.emplace_back(CompareOpType::GREATER_EQUAL);
+        break;
+      case Token::Type::IS:
+        expr->ops.emplace_back(CompareOpType::IS);
+        break;
+      case Token::Type::IS_NOT:
+        expr->ops.emplace_back(CompareOpType::IS_NOT);
+        break;
+      case Token::Type::IN:
+        expr->ops.emplace_back(CompareOpType::IN);
+        break;
+      case Token::Type::NOT_IN:
+        expr->ops.emplace_back(CompareOpType::NOT_IN);
+        break;
+      default:
+        matched = false;
+        break;
+    }
+
+    if (!matched) break;
+    tokens_.Advance();
+
+    // Parse the comparator expression (after the comparison operator).
+    ParseExpression(TokenPrecedence::COMPARISON);
+    expr->comparators.emplace_back(Pop(&exprs_));
+  }
+
+  // Make sure that we had at least one comparator on the right hand side.
+  if (expr->ops.empty() || expr->comparators.empty()) {
+    throw std::runtime_error(
+        "Encountered comparison token, but found no comparator.");
+  }
+
+  Push(&exprs_, std::move(expr));
 }
 
 void Parser::ParseConstantExpression() {
@@ -472,7 +710,8 @@ void Parser::ParseConstantExpression() {
         return NoneType();
     }
   }();
-  PushExpression(std::move(expr));
+
+  Push(&exprs_, std::move(expr));
 }
 
 void Parser::ParseNameExpression() {
@@ -484,20 +723,5 @@ void Parser::ParseNameExpression() {
   auto expr = std::make_unique<Name>();
   expr->id = std::move(token->value.value());
   expr->ctx_type = ExprContextType::LOAD;
-  PushExpression(std::move(expr));
-}
-
-void Parser::PushStatement(StatementNode::Ptr statement) {
-  blocks_.top()->emplace_back(std::move(statement));
-}
-
-ExpressionNode::Ptr Parser::PopExpression() {
-  if (exprs_.empty()) return nullptr;
-  ExpressionNode::Ptr expression = std::move(exprs_.top());
-  exprs_.pop();
-  return expression;
-}
-
-void Parser::PushExpression(ExpressionNode::Ptr expression) {
-  exprs_.push(std::move(expression));
+  Push(&exprs_, std::move(expr));
 }

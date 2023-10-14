@@ -1,5 +1,7 @@
 #include "syntax_tree_visitor.h"
 
+#include <functional>
+
 namespace {
 // Hard coded num spaces for print indentation.
 constexpr size_t kIndentationWidth = 4;
@@ -23,70 +25,112 @@ std::string ConstantValueString(const ConstantValue& constant) {
   };
   return std::visit(DebugVisitor{}, constant);
 }
+
+// Function that prints a single element of type T.
+template <typename T>
+using PrintElement = std::function<void(const T&, DebugStringVisitor*)>;
+
+// Default print function for a single element.
+template <typename T>
+PrintElement<T> DefaultPrint() {
+  return [](const T& element, DebugStringVisitor* visitor) {
+    element->Visit(visitor);
+  };
+}
+
+// Append a list element to the debug string visitor.
+template <typename T>
+void AppendList(const std::string& name, const std::vector<T>& list,
+                DebugStringVisitor* visitor,
+                PrintElement<T> print_element = DefaultPrint<T>()) {
+  visitor->AppendLine(name);
+  visitor->Append("=[");
+  visitor->indentation += 1;
+  if (!list.empty()) {
+    for (size_t i = 0; i < list.size() - 1; ++i) {
+      visitor->AppendLine("");
+      print_element(list[i], visitor);
+      visitor->Append(",");
+    }
+    visitor->AppendLine("");
+    print_element(list.back(), visitor);
+  }
+  visitor->Append("]");
+  visitor->indentation -= 1;
+}
 }  // namespace
 
 void DebugStringVisitor::Visit(Module* node) {
   Append("Module(");
   indentation += 1;
-  AppendLine("body=[");
-  indentation += 1;
-  for (const auto& stmt : node->body) {
-    AppendLine("");
-    stmt->Visit(this);
-  }
-  Append("])\n");
-  indentation -= 2;
+
+  AppendList("body", node->body, this);
+
+  Append(")");
+  indentation -= 1;
+  AppendLine("");
 }
 
 void DebugStringVisitor::Visit(Interactive* node) {
   Append("Interactive(");
   indentation += 1;
-  AppendLine("body=[");
-  indentation += 1;
-  for (const auto& stmt : node->body) {
-    AppendLine("");
-    stmt->Visit(this);
-  }
-  Append("])\n");
-  indentation -= 2;
+
+  AppendList("body", node->body, this);
+
+  Append(")");
+  indentation -= 1;
+  AppendLine("");
 }
 
 void DebugStringVisitor::Visit(Expression* node) {
   Append("Expression(");
   indentation += 1;
+
   AppendLine("body=");
   indentation += 1;
   if (node->body) node->body->Visit(this);
-  Append(")\n");
+
+  Append(")");
   indentation -= 2;
+  AppendLine("");
 }
 
 void DebugStringVisitor::Visit(Delete* node) {
   Append("Delete(");
   indentation += 1;
-  AppendLine("targets=[");
-  indentation += 1;
-  for (const auto& expr : node->targets) {
-    AppendLine("");
-    expr->Visit(this);
-  }
-  Append("])");
-  indentation -= 2;
+
+  AppendList("targets", node->targets, this);
+
+  Append(")");
+  indentation -= 1;
 }
 
 void DebugStringVisitor::Visit(Assign* node) {
   Append("Assign(");
   indentation += 1;
-  AppendLine("targets=[");
-  indentation += 1;
-  for (const auto& expr : node->targets) {
-    AppendLine("");
-    expr->Visit(this);
-  }
-  Append("],");
-  indentation -= 1;
+
+  AppendList("targets", node->targets, this);
+  Append(",");
+
   AppendLine("value=");
   node->value->Visit(this);
+  Append(")");
+  indentation -= 1;
+}
+
+void DebugStringVisitor::Visit(If* node) {
+  Append("If(");
+  indentation += 1;
+
+  AppendLine("test=");
+  node->test->Visit(this);
+  Append(",");
+
+  AppendList("then", node->then_body, this);
+  Append(",");
+  
+  AppendList("else", node->else_body, this);
+
   Append(")");
   indentation -= 1;
 }
@@ -94,8 +138,10 @@ void DebugStringVisitor::Visit(Assign* node) {
 void DebugStringVisitor::Visit(Expr* node) {
   Append("Expr(");
   indentation += 1;
+
   AppendLine("value=");
   node->expr->Visit(this);
+
   Append(")");
   indentation -= 1;
 }
@@ -103,9 +149,11 @@ void DebugStringVisitor::Visit(Expr* node) {
 void DebugStringVisitor::Visit(BinaryOp* node) {
   Append("BinaryOp(");
   indentation += 1;
+
   AppendLine("lhs=");
   node->lhs->Visit(this);
   Append(",");
+
   AppendLine("op=");
   Append([&] {
     switch (node->op_type) {
@@ -138,15 +186,18 @@ void DebugStringVisitor::Visit(BinaryOp* node) {
     }
     return "";
   }());
+
   AppendLine("rhs=");
   node->rhs->Visit(this);
   indentation -= 1;
+
   Append(")");
 }
 
 void DebugStringVisitor::Visit(UnaryOp* node) {
   Append("UnaryOp(");
   indentation += 1;
+
   AppendLine("op=");
   Append([&] {
     switch (node->op_type) {
@@ -161,10 +212,55 @@ void DebugStringVisitor::Visit(UnaryOp* node) {
     }
     return "";
   }());
+
   AppendLine("operand=");
   node->operand->Visit(this);
   indentation -= 1;
+
   Append(")");
+}
+
+void DebugStringVisitor::Visit(Compare* node) {
+  Append("Compare(");
+  indentation += 1;
+
+  AppendLine("lhs="), node->lhs->Visit(this);
+  Append(",");
+
+  PrintElement<CompareOpType> print_op = [&](const CompareOpType& op_type,
+                                             DebugStringVisitor* visitor) {
+    visitor->Append([&] {
+      switch (op_type) {
+        case CompareOpType::EQUALS:
+          return "Equals";
+        case CompareOpType::NOT_EQUALS:
+          return "Not equals";
+        case CompareOpType::LESS_THAN:
+          return "Less than";
+        case CompareOpType::LESS_EQUAL:
+          return "Less equal";
+        case CompareOpType::GREATER_THAN:
+          return "Greater than";
+        case CompareOpType::GREATER_EQUAL:
+          return "Greater equal";
+        case CompareOpType::IS:
+          return "Is";
+        case CompareOpType::IS_NOT:
+          return "Is not";
+        case CompareOpType::IN:
+          return "In";
+        case CompareOpType::NOT_IN:
+          return "Not in";
+      }
+      return "";
+    }());
+  };
+  AppendList("ops", node->ops, this, print_op);
+  Append(",");
+
+  AppendList("comparators", node->comparators, this);
+  Append(")");
+  indentation -= 1;
 }
 
 void DebugStringVisitor::Visit(Constant* node) {
@@ -174,7 +270,6 @@ void DebugStringVisitor::Visit(Constant* node) {
 }
 
 void DebugStringVisitor::Visit(Name* node) {
-  puts("name???");
   Append("Name(id='");
   Append(node->id);
   Append("', ctx=");

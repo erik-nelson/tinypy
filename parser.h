@@ -1,7 +1,7 @@
 #pragma once
 
+#include <deque>
 #include <functional>
-#include <stack>
 #include <unordered_map>
 
 #include "stream.h"
@@ -68,19 +68,32 @@ class Parser {
 
   explicit Parser(StreamReader<Token> tokens, Mode mode = Mode::MODULE);
 
-  // TODO(erik): Describe.
-  SyntaxTree& Parse() &;
-  SyntaxTree&& Parse() &&;
+  // Parse all remaining source code.
+  void Parse();
+
+  // Access the parsed syntax tree.
+  const SyntaxTree& syntax_tree() const& { return syntax_tree_; }
+  SyntaxTree&& syntax_tree() && { return std::move(syntax_tree_); }
 
  private:
+  // Returns whether the next token matches the provided type.
+  bool Peek(Token::Type type) const;
+
   // Consumes the next token if it matches the provided type.
   bool Match(Token::Type type) const;
+
+  // Checks that the next token is of the provided type, then consumes it.
+  // Throws an exception if the token's type did not match.
+  void Consume(Token::Type type) const;
 
   // Throws an exception if the next token does not exist, or does not match
   // the provided type.
   void Expect(Token::Type type) const;
 
-  // The body of a block of python code is a series of statements.
+  // Parse a block, consisting of a sequence of statements. Each block
+  // corresponds to one single scope, separated by indentation.
+  void ParseBlock();
+
   // Parse a single statement. Each statement potentially includes a set of
   // expressions.
   void ParseStatement();
@@ -98,7 +111,7 @@ class Parser {
   // void ParseAugAssignStatement();
   // void ParseForStatement();
   // void ParseWhileStatement();
-  // void ParseIfStatement();
+  void ParseIfStatement();
   // void ParseWithStatement();
   // void ParseRaiseStatement();
   // void ParseTryStatement();
@@ -123,19 +136,12 @@ class Parser {
   // void ParseTupleExpression();
   // void ParseAwaitExpression();
   // void ParseYieldExpression();
-  // void ParseCompareExpression();
+  void ParseCompareExpression();
   void ParseConstantExpression();
   // void ParseAttributeExpression();
   // void ParseStarredExpression();
   void ParseNameExpression();
   // void ParseSliceExpression();
-
-  // TODO(erik): Describe when finished.
-  void PushStatement(StatementNode::Ptr statement);
-
-  // TODO(erik): Describe when finished.
-  ExpressionNode::Ptr PopExpression();
-  void PushExpression(ExpressionNode::Ptr expression);
 
   // A stream of tokens generated from source code, which are converted
   // to statements and expressions in the syntax tree when read.
@@ -147,13 +153,17 @@ class Parser {
   // The syntax tree. Incrementally built from `tokens_`.
   SyntaxTree syntax_tree_;
 
-  // A block refers to a contiguous sequence of statements, indented by the same
+  // Previously parsed blocks that do not belong to a syntax tree node yet. A
+  // block refers to a contiguous sequence of statements, indented by the same
   // amount.
   using Block = std::vector<StatementNode::Ptr>;
-  std::stack<Block*> blocks_;
+  std::deque<Block> blocks_;
+
+  // Previously parsed statements that do not belong to a block yet.
+  std::deque<StatementNode::Ptr> stmts_;
 
   // Previously parsed expressions that do not belong to a statement yet.
-  std::stack<ExpressionNode::Ptr> exprs_;
+  std::deque<ExpressionNode::Ptr> exprs_;
 
   // TODO(erik): Change to array? Likewise for other maps keyed on token type.
   std::unordered_map<Token::Type, ParseStatementRule> stmt_rules_;

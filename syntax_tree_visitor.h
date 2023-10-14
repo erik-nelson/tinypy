@@ -13,11 +13,13 @@ struct SyntaxTreeVisitor {
   // Statement nodes.
   virtual void Visit(Delete* node) = 0;
   virtual void Visit(Assign* node) = 0;
+  virtual void Visit(If* node) = 0;
   virtual void Visit(Expr* node) = 0;
 
   // Expression nodes.
   virtual void Visit(BinaryOp* node) = 0;
   virtual void Visit(UnaryOp* node) = 0;
+  virtual void Visit(Compare* node) = 0;
   virtual void Visit(Constant* node) = 0;
   virtual void Visit(Name* node) = 0;
 };
@@ -31,20 +33,22 @@ struct EvaluateVisitor : public SyntaxTreeVisitor {
 // Visitor that builds a debug string for the syntax tree.
 struct DebugStringVisitor : public SyntaxTreeVisitor {
   // Module nodes.
-  void Visit(Module* node);
-  void Visit(Interactive* node);
-  void Visit(Expression* node);
+  void Visit(Module* node) override;
+  void Visit(Interactive* node) override;
+  void Visit(Expression* node) override;
 
   // Statement nodes.
-  void Visit(Delete* node);
-  void Visit(Assign* node);
-  void Visit(Expr* node);
+  void Visit(Delete* node) override;
+  void Visit(Assign* node) override;
+  void Visit(If* node) override;
+  void Visit(Expr* node) override;
 
   // Expression nodes.
-  void Visit(BinaryOp* node);
-  void Visit(UnaryOp* node);
-  void Visit(Constant* node);
-  void Visit(Name* node);
+  void Visit(BinaryOp* node) override;
+  void Visit(UnaryOp* node) override;
+  void Visit(Compare* node) override;
+  void Visit(Constant* node) override;
+  void Visit(Name* node) override;
 
   std::string str;
   size_t indentation = 0;
