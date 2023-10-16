@@ -372,9 +372,6 @@ void Parser::ParseBlock() {
               std::make_move_iterator(stmts_.end()));
   stmts_.clear();
   Push(&blocks_, std::move(block));
-
-  // Remove any dedents afterwards.
-  while (Match(Token::Type::DEDENT));
 }
 
 void Parser::ParseStatement() {

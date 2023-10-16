@@ -310,7 +310,6 @@ else:
   DebugPrint(source, tree);
 }
 
-#if 0
 TEST(SyntaxTree, NestedIfElse) {
     std::string source = 
 R"(
@@ -397,4 +396,3 @@ else:
 
   DebugPrint(source, tree);
 }
-#endif
