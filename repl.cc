@@ -1,10 +1,109 @@
 #include <iostream>
 #include <string>
+#include <cassert>
+#include <unistd.h>
+#include <termios.h>
 
 #include "interpreter.h"
 #include "version.h"
 
 namespace {
+// Hard coded ASCII keys used in the REPL.
+static constexpr char kKeyBackspace = 8;
+static constexpr char kKeyReturn = 10;
+static constexpr char kKeyEscape = 27;
+static constexpr char kKeyDelete = 127;
+static constexpr char kClearSequence[] = "\033[2K\r";
+
+class TerminalReader {
+  public:
+    TerminalReader() {
+      // Turn off buffering. Read one keystroke at a time.
+      assert(tcgetattr(STDIN_FILENO, &settings_) >= 0);
+      settings_.c_lflag &= ~(ICANON | ECHO);
+      assert(tcsetattr(STDIN_FILENO, TCSANOW, &settings_) >= 0);
+    }
+
+    // Read a line from the terminal. Handles up/down arrows for history.
+    // Input specifies whether this is part of a multi-line statement.
+    std::string GetLine(bool multiline) {
+      std::string input;
+      
+      while(true) {
+        std::cout << kClearSequence; // clear previous output.
+        std::cout << (multiline ? "... " : ">>> ");
+        std::cout << (idx_ >= 0 ? history_[idx_] : input);
+        fflush(stdout);
+        const char c = GetChar();
+
+        // When the user presses enter, accept the line.
+        if (c == kKeyReturn) {
+          std::cout << std::endl;
+          if (idx_ >= 0) input = history_[idx_];
+          idx_ = -1;
+          break;
+       } 
+       
+       // Handle escape keys, like up and down arrow keypresses.
+       else if (c == kKeyEscape) {
+          if (GetChar() != '[') continue;
+
+          char escape_c = GetChar();
+          if (escape_c == 'A') {
+            // We read '^[[A'.
+            if (!history_.empty()) {
+              idx_ = std::min(idx_ + 1, static_cast<int>(history_.size() - 1));
+            }
+          } else if (escape_c == 'B') {
+            // We read '^[[B'.
+            if (!history_.empty()) {
+              idx_ = std::max(idx_ - 1, -1);
+            }
+          } 
+        } 
+        
+        // Handle backspace and delete - clear one character from output.
+        else if (c == kKeyBackspace || c == kKeyDelete) {
+          if (!input.empty()) {
+            input.pop_back();
+            std::cout << kKeyBackspace << " " << kKeyBackspace;
+          }
+        } 
+        
+        // Otherwise append the character to the input line.
+        else {
+          input.push_back(c);
+          std::cout << c;
+        }      
+      }
+
+      AppendHistory(input);
+      return input;
+    }
+
+  private:
+    // Get a single character.
+    char GetChar() const {
+      char buf = 0;
+      assert(read(STDIN_FILENO, &buf, 1) >= 0);
+      return buf;
+    }
+
+    void AppendHistory(std::string str) {
+      for (auto c : str) {
+        if (!std::isspace(c)) {
+          history_.emplace_front(std::move(str));
+          return;
+        }
+      }
+    }
+
+    struct termios settings_ = {0};
+    std::deque<std::string> history_;
+    int idx_ = -1;
+};
+
+
 // Whether this begins a multi-line statement. Currently only checks whether
 // the line ends with a ':' character.
 // TODO(erik): Add other multi-line conditions, such as string linebreaks.
@@ -35,6 +134,7 @@ void ProcessStatement(Interpreter* interpreter,
 }  // namespace
 
 int main(int argc, char** argv) {
+  TerminalReader reader;
   Interpreter interpreter;
 
   // Startup info.
@@ -47,9 +147,7 @@ int main(int argc, char** argv) {
 
   while (true) {
     // Prompt the user for input.
-    std::string input;
-    std::cout << (multiline ? "... " : ">>> ");
-    std::getline(std::cin, input);
+    std::string input = reader.GetLine(multiline);
 
     // Catch request to exit.
     if (input == "exit()") {
